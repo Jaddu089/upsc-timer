@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>UPSC Focus — Timer</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+
+<!-- confetti lib -->
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+<style>
+  :root{
+    --bg:#0f0f10;
+    --panel:#111215;
+    --muted:#9aa0a6;
+    --accent:#6B33FF; /* purple ring */
+    --accent-2:#7F4CFF;
+    --ring-thickness:22;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%; margin:0; font-family:Nunito,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;}
+  body{background:var(--bg); color:#fff; display:flex; align-items:stretch;}
+
+/* Sidebar like screenshot */
+  .sidebar{
+    width:220px;
+    background:#0e0e0f;
+    border-right:1px solid rgba(255,255,255,0.03);
+    padding:28px 20px;
+    display:flex; flex-direction:column; justify-content:space-between;
+  }
+  .logo{color:var(--accent); font-weight:800; letter-spacing:0.6px; font-size:26px; margin-bottom:26px;}
+  .nav{display:flex;flex-direction:column; gap:18px;}
+  .nav .item{display:flex;align-items:center;gap:12px;color:var(--muted); cursor:pointer; padding:8px 6px; border-radius:8px;}
+  .nav .item:hover{color:#fff; background:rgba(255,255,255,0.02);}
+  .nav .item .icon{font-size:18px; opacity:0.95}
+  .bottom-note{font-size:13px;color:var(--muted);}
+
+/* Main area */
+  .main{
+    flex:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+    gap:40px;
+    padding:60px;
+  }
+
+/* large circular timer block (positioned toward right center visually) */
+  .timer-area{
+    width:680px;
+    height:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+  }
+
+  .circle-wrap{
+    width:420px;
+    height:420px;
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    transition:transform .25s ease;
+  }
+  .circle-wrap:hover{transform:scale(1.01)}
+  /* outer neon ring created with svg stroke */
+  svg.progress{
+    width:420px;height:420px; display:block;
+    filter: drop-shadow(0 12px 30px rgba(107,51,255,0.18));
+  }
+  /* inner center disc */
+  .center{
+    position:absolute; width:320px;height:320px;border-radius:50%;
+    background:linear-gradient(180deg,#0b0b0b,#0f0f10);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    box-shadow: inset 0 -6px 40px rgba(0,0,0,0.6);
+  }
+  .time{
+    font-size:72px;font-weight:800; color:#fff; letter-spacing:1px;
+    text-shadow: 0 6px 24px rgba(0,0,0,0.7);
+    cursor:pointer;
+  }
+  .label{margin-top:10px; color:var(--muted); font-weight:600; letter-spacing:3px}
+
+/* controls under the circle */
+  .controls{
+    margin-top:28px; display:flex;flex-direction:column;align-items:center; gap:8px;
+  }
+  .icon-row{display:flex;gap:22px; align-items:center;}
+  .circle-btn{
+    width:56px;height:56px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    background:transparent;border:2px solid rgba(255,255,255,0.06);
+    color:#ddd; cursor:pointer; transition:all .18s ease;
+    box-shadow:0 6px 14px rgba(0,0,0,0.5);
+  }
+  .circle-btn:hover{transform:translateY(-6px); border-color:rgba(123,75,255,0.9); color:#fff}
+  .session-text{margin-top:10px;color:var(--muted);font-weight:600}
+
+/* footer */
+  .footer{position:absolute; bottom:18px; left:260px; color:var(--muted); font-size:13px}
+
+/* settings panel (modal-like on the left of main content) */
+  .settings-panel{
+    position:absolute; top:40px; left:40px; background:rgba(255,255,255,0.03);
+    border-radius:12px; padding:14px; width:260px; box-shadow:0 14px 36px rgba(0,0,0,0.6);
+    display:flex;flex-direction:column; gap:10px;
+  }
+  .settings-panel h3{margin:0; font-size:14px; color:#fff; font-weight:700}
+  .settings-row{display:flex;flex-direction:column; gap:6px; font-size:13px; color:var(--muted)}
+  .settings-row label{font-size:13px}
+  .selector, .small-btn{padding:8px 10px; border-radius:10px; border:1px solid rgba(255,255,255,0.04); background:transparent; color:#fff}
+  .small-btn{cursor:pointer}
+
+/* fullscreen overlay (black big timer) */
+  .fullscreen{
+    position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:#000; z-index:60;
+    flex-direction:column; gap:18px;
+  }
+  .fullscreen .big-time{color:#fff; font-size:140px; font-weight:800; letter-spacing:2px}
+  .fs-close{position:absolute; right:28px; top:28px; color:#fff; background:transparent; border:1px solid rgba(255,255,255,0.06); padding:10px 12px; border-radius:8px; cursor:pointer}
+
+/* hen, tomato, confetti holders (absolute inside main) */
+  .anim-layer{position:absolute; inset:0; pointer-events:none; z-index:50}
+  .hen-emoji{position:absolute; left:-120px; bottom:90px; font-size:96px; transform:translateX(0); opacity:0}
+  .egg-emoji{position:absolute; left:50%; bottom:160px; transform:translateX(-50%); font-size:48px; opacity:0}
+  .tomato-splash{position:absolute; left:50%; top:50%; transform:translate(-50%,-5%); opacity:0; pointer-events:none}
+  .tomato-piece{width:18px;height:18px;border-radius:50%; position:absolute}
+
+/* subtle shimmer on accent ring (moving gradient) */
+  .glow{filter:blur(18px);opacity:0.12}
+
+  /* small responsive tweaks */
+  @media (max-width:920px){
+    .timer-area{width:100%; padding:40px}
+    .circle-wrap{transform:scale(0.84)}
+  }
+
+</style>
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" role="navigation" aria-label="Sidebar">
+    <div>
+      <div class="logo">PRO PULSE</div>
+      <nav class="nav">
+        <div class="item"><span class="icon">⏱</span> <span>Timer</span></div>
+        <div class="item" id="openSettingsBtn"><span class="icon">⚙️</span> <span>Settings</span></div>
+      </nav>
+    </div>
+
+    <div>
+      <div class="item" id="themeToggle"><span class="icon">🌙</span> <span>Dark mode</span></div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main" role="main">
+    <div class="timer-area">
+
+      <div class="circle-wrap" id="circleWrap">
+        <!-- SVG circular ring (stroke) -->
+        <svg class="progress" viewBox="0 0 420 420" aria-hidden="true">
+          <defs>
+            <linearGradient id="ringGrad" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0" stop-color="#6B33FF"/>
+              <stop offset="1" stop-color="#7F4CFF"/>
+            </linearGradient>
+          </defs>
+          <circle cx="210" cy="210" r="170" stroke="#1b1b1d" stroke-width="26" fill="none"></circle>
+          <circle id="ring" cx="210" cy="210" r="170" stroke="url(#ringGrad)" stroke-width="26" fill="none" stroke-linecap="round" stroke-dasharray="1069.0" stroke-dashoffset="1069.0"></circle>
+        </svg>
+
+        <div class="center" aria-hidden="false">
+          <div class="time" id="timeDisplay" title="Click to fullscreen">25:00</div>
+          <div class="label">FOCUS</div>
+        </div>
+
+      </div> <!-- circleWrap -->
+
+      <!-- Animations layer -->
+      <div class="anim-layer" id="animLayer" aria-hidden="true">
+        <div class="hen-emoji" id="hen">🐔</div>
+        <div class="egg-emoji" id="egg">🥚</div>
+        <div class="tomato-splash" id="tomato"></div>
+        <canvas id="confettiCanvas" style="position:absolute; inset:0; width:100%; height:100%; pointer-events:none;"></canvas>
+      </div>
+
+    </div>
+
+    <!-- controls -->
+    <div style="position:absolute; right:60px; top:58%; transform:translateY(-50%); text-align:center;">
+      <div class="controls">
+        <div class="icon-row">
+          <button class="circle-btn" id="resetBtn" title="Reset">🔁</button>
+          <button class="circle-btn" id="startPauseBtn" title="Start / Pause">▶️</button>
+          <button class="circle-btn" id="skipBtn" title="Skip">⏭️</button>
+        </div>
+        <div class="session-text" id="sessionInfo">1 of 4 sessions</div>
+      </div>
+    </div>
+
+    <!-- Settings panel (hidden by default) -->
+    <div class="settings-panel" id="settingsPanel" style="display:none;">
+      <h3>Settings</h3>
+
+      <div class="settings-row">
+        <label>Focus length (min)</label>
+        <input id="focusInput" class="selector" type="number" min="1" value="25">
+      </div>
+
+      <div class="settings-row">
+        <label>Break length (min)</label>
+        <input id="breakInput" class="selector" type="number" min="1" value="5">
+      </div>
+
+      <div class="settings-row">
+        <label>Sessions (cycles)</label>
+        <input id="cyclesInput" class="selector" type="number" min="1" value="4">
+      </div>
+
+      <div class="settings-row">
+        <label>Notification sound (upload)</label>
+        <input id="soundUpload" type="file" accept="audio/*">
+      </div>
+
+      <div class="settings-row">
+        <label>Volume</label>
+        <input id="volumeSlider" type="range" min="0" max="1" step="0.05" value="0.6">
+      </div>
+
+      <div class="settings-row">
+        <label>Animation on finish</label>
+        <select id="animationSelect" class="selector">
+          <option value="confetti">Confetti (awards)</option>
+          <option value="tomato">Tomato Sauce (pomodoro)</option>
+          <option value="hen">Hen lays Egg (funny)</option>
+        </select>
+      </div>
+
+      <div style="display:flex;gap:8px; margin-top:6px;">
+        <button class="small-btn" id="saveSettings">Save</button>
+        <button class="small-btn" id="closeSettings">Close</button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Fullscreen black timer (click to close) -->
+  <div class="fullscreen" id="fullscreen" aria-hidden="true">
+    <button class="fs-close" id="fsClose">Close ✕</button>
+    <div class="big-time" id="bigTime">25:00</div>
+  </div>
+
+<script>
+/* -------------------------
+   Timer + UI logic
+   -------------------------*/
+(function(){
+  // DOM refs
+  const ring = document.getElementById('ring');
+  const timeDisplay = document.getElementById('timeDisplay');
+  const bigTime = document.getElementById('bigTime');
+  const fullscreen = document.getElementById('fullscreen');
+  const startPauseBtn = document.getElementById('startPauseBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const skipBtn = document.getElementById('skipBtn');
+  const openSettingsBtn = document.getElementById('openSettingsBtn');
+  const settingsPanel = document.getElementById('settingsPanel');
+  const closeSettings = document.getElementById('closeSettings');
+  const saveSettings = document.getElementById('saveSettings');
+  const focusInput = document.getElementById('focusInput');
+  const breakInput = document.getElementById('breakInput');
+  const cyclesInput = document.getElementById('cyclesInput');
+  const soundUpload = document.getElementById('soundUpload');
+  const volumeSlider = document.getElementById('volumeSlider');
+  const animationSelect = document.getElementById('animationSelect');
+  const sessionInfo = document.getElementById('sessionInfo');
+
+  const confettiCanvas = document.getElementById('confettiCanvas');
+  const animLayer = document.getElementById('animLayer');
+  const hen = document.getElementById('hen');
+  const egg = document.getElementById('egg');
+  const tomato = document.getElementById('tomato');
+
+  // audio instance
+  let notificationAudio = new Audio();
+  notificationAudio.volume = parseFloat(volumeSlider.value);
+
+  volumeSlider.addEventListener('input', () => {
+    notificationAudio.volume = parseFloat(volumeSlider.value);
+  });
+
+  soundUpload.addEventListener('change', (e) => {
+    const f = e.target.files[0];
+    if(f) notificationAudio.src = URL.createObjectURL(f);
+  });
+
+  // ring constants
+  const R = parseFloat(ring.getAttribute('r'));
+  const circumference = 2*Math.PI*R;
+  ring.style.strokeDasharray = circumference.toFixed(2);
+  ring.style.strokeDashoffset = circumference.toFixed(2);
+
+  // state
+  let focusMinutes = parseInt(focusInput.value,10) || 25;
+  let breakMinutes = parseInt(breakInput.value,10) || 5;
+  let totalCycles = parseInt(cyclesInput.value,10) || 4;
+  let currentCycle = 1;
+  let isRunning = false;
+  let inBreak = false;
+  let totalSeconds = focusMinutes * 60;
+  let remaining = totalSeconds;
+  let timerId = null;
+  let animationChoice = animationSelect.value;
+
+  // Update displays
+  function formatTime(sec){
+    sec = Math.max(0, Math.round(sec));
+    const m = Math.floor(sec/60);
+    const s = sec%60;
+    return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }
+
+  function setRingProgress(){
+    const percent = 1 - (remaining / totalSeconds);
+    const offset = Math.max(0, circumference * (1 - percent));
+    // smooth via transition in CSS (transition handled by JS by setting style)
+    ring.style.transition = 'stroke-dashoffset 0.4s linear';
+    ring.style.strokeDashoffset = (circumference * (1 - percent)).toFixed(2);
+  }
+
+  function updateDisplays(){
+    timeDisplay.textContent = formatTime(remaining);
+    bigTime.textContent = timeDisplay.textContent;
+    setRingProgress();
+    sessionInfo.textContent = `${currentCycle} of ${totalCycles} sessions`;
+  }
+
+  // Timer tick
+  function tick(){
+    remaining -= 1;
+    if(remaining < 0) remaining = 0;
+    updateDisplays();
+    if(remaining <= 0){
+      clearInterval(timerId);
+      timerId = null;
+      isRunning = false;
+      startPauseBtn.textContent = '▶️';
+      onSessionComplete();
+    }
+  }
+
+  function start(){
+    if(isRunning) return;
+    isRunning = true;
+    startPauseBtn.textContent = '⏸';
+    if(!timerId){
+      timerId = setInterval(tick,1000);
+    }
+  }
+
+  function pause(){
+    isRunning = false;
+    startPauseBtn.textContent = '▶️';
+    if(timerId){ clearInterval(timerId); timerId = null; }
+  }
+
+  function resetAll(){
+    pause();
+    inBreak = false;
+    currentCycle = 1;
+    totalSeconds = focusMinutes * 60;
+    remaining = totalSeconds;
+    updateDisplays();
+  }
+
+  function skip(){
+    // Skip current mode -> if focus ends, go to break; if break ends, go to next focus
+    if(timerId){ clearInterval(timerId); timerId = null; }
+    isRunning = false;
+    startPauseBtn.textContent = '▶️';
+
+    if(!inBreak){
+      // start break early
+      inBreak = true;
+      totalSeconds = breakMinutes * 60;
+      remaining = totalSeconds;
+    } else {
+      // move to next focus cycle
+      currentCycle++;
+      inBreak = false;
+      totalSeconds = focusMinutes * 60;
+      remaining = totalSeconds;
+      if(currentCycle > totalCycles){
+        // finished all
+        currentCycle = totalCycles;
+        remaining = 0;
+      }
+    }
+    updateDisplays();
+  }
+
+  // When a focus or break completes
+  function onSessionComplete(){
+    // play notification
+    if(notificationAudio.src) {
+      notificationAudio.currentTime = 0;
+      notificationAudio.play().catch(()=>{/* autoplay blocked sometimes */});
+    } else {
+      // small default beep using WebAudio if none uploaded
+      try{
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = 880;
+        g.gain.value = 0.05;
+        o.connect(g); g.connect(ctx.destination);
+        o.start(); setTimeout(()=>{ o.stop(); ctx.close(); }, 300);
+      }catch(e){}
+    }
+
+    // chosen animation
+    animationChoice = animationSelect.value;
+    if(animationChoice === 'confetti'){
+      playConfetti();
+      showToast('Great job!');
+    } else if(animationChoice === 'tomato'){
+      playTomatoSplash();
+    } else if(animationChoice === 'hen'){
+      playHenEgg();
+    }
+
+    // if finished focus -> go to break automatically, else if break ended -> go next focus/finish
+    if(!inBreak){
+      // completed focus, start break automatically if cycles remain
+      inBreak = true;
+      totalSeconds = breakMinutes * 60;
+      remaining = totalSeconds;
+      updateDisplays();
+      // auto start break
+      start();
+    } else {
+      // completed break -> move to next cycle
+      currentCycle++;
+      if(currentCycle > totalCycles){
+        // All done
+        showToast('All sessions completed 🎉');
+        inBreak = false;
+        totalSeconds = focusMinutes * 60;
+        remaining = 0;
+        updateDisplays();
+        return;
+      } else {
+        inBreak = false;
+        totalSeconds = focusMinutes * 60;
+        remaining = totalSeconds;
+        updateDisplays();
+        // auto-start next focus
+        start();
+      }
+    }
+  }
+
+  // Animations
+  // Confetti
+  function playConfetti(){
+    try{
+      confetti.create(confettiCanvas, {resize:true, useWorker:true})({
+        particleCount: 160,
+        spread: 80,
+        origin: { y: 0.6 }
+      });
+    }catch(e){
+      // fallback simple confetti repeated
+      confetti({ particleCount: 120, spread: 70, origin: { y: 0.6 }});
+    }
+  }
+  // Tomato splash
+  function playTomatoSplash(){
+    const container = tomato;
+    container.innerHTML = '';
+    container.style.opacity = '1';
+    const pieces = [];
+    for(let i=0;i<20;i++){
+      const el = document.createElement('div');
+      el.classList.add('tomato-piece');
+      el.style.background = `hsl(${Math.random()*10 + 0}, 70%, 50%)`;
+      el.style.left = (50 + (Math.random()-0.5)*40) + '%';
+      el.style.top = (40 + (Math.random()-0.5)*40) + '%';
+      const s = 8 + Math.random()*18;
+      el.style.width = s+'px'; el.style.height = s+'px';
+      container.appendChild(el);
+      pieces.push(el);
+      // animate with CSS via JS
+      el.animate([
+        { transform: `translateY(0) scale(0.6)`, opacity:1 },
+        { transform: `translateY(200px) rotate(${Math.random()*720 - 360}deg) scale(1)`, opacity:0 }
+      ], { duration: 1600 + Math.random()*900, easing:'cubic-bezier(.2,.9,.2,1)'});
+    }
+    // disappear container
+    setTimeout(()=>{ container.style.opacity='0'; container.innerHTML=''; }, 2200);
+    // confetti complement
+    playConfetti();
+  }
+
+  // Hen lays egg funny
+  function playHenEgg(){
+    const henEl = hen;
+    const eggEl = egg;
+    henEl.style.transition = 'none';
+    henEl.style.left = '-140px';
+    henEl.style.opacity = '1';
+    henEl.style.transform = 'translateX(0)';
+
+    // walk in
+    henEl.animate([
+      { transform: 'translateX(0)', left: '-140px', opacity:0 },
+      { transform: 'translateX(0)', left: 'calc(50% - 210px)', opacity:1 },
+      { transform: 'translateX(0)', left: 'calc(50% - 30px)', opacity:1 }
+    ], { duration: 1200, easing:'cubic-bezier(.2,.9,.2,1)', fill:'forwards' });
+
+    // wiggle then egg drop
+    setTimeout(()=> {
+      henEl.animate([
+        { transform: 'translateY(0) rotate(0deg)'},
+        { transform: 'translateY(-6px) rotate(-6deg)'},
+        { transform: 'translateY(0) rotate(6deg)'},
+        { transform: 'translateY(0) rotate(0deg)'}
+      ], { duration: 800, iterations:2 });
+
+      // egg reveal & drop
+      eggEl.style.opacity = '1';
+      eggEl.style.transform = 'translateX(-50%) translateY(-120px)';
+      eggEl.animate([
+        { transform:'translateX(-50%) translateY(-120px) scale(.8)', opacity:1 },
+        { transform:'translateX(-50%) translateY(40px) scale(1)', opacity:1 },
+        { transform:'translateX(-50%) translateY(16px) scale(.98)', opacity:1 }
+      ], { duration: 900, easing:'cubic-bezier(.2,.9,.2,1)', fill:'forwards' });
+
+      // small bounce on egg
+      setTimeout(()=> {
+        eggEl.animate([{transform:'translateX(-50%) translateY(16px) scale(1)'},{transform:'translateX(-50%) translateY(8px) scale(.98)'},{transform:'translateX(-50%) translateY(16px) scale(1)'}], { duration:600});
+      }, 1000);
+
+      // confetti pop
+      setTimeout(()=> playConfetti(), 1100);
+
+      // hide after some time
+      setTimeout(()=> {
+        eggEl.style.opacity='0';
+        henEl.style.opacity='0';
+      }, 2400);
+    }, 1200);
+  }
+
+  // little toast (temporary text near controls)
+  function showToast(msg){
+    const el = document.createElement('div');
+    el.textContent = msg;
+    el.style.position = 'fixed';
+    el.style.right = '48px';
+    el.style.bottom = '34px';
+    el.style.background = 'rgba(255,255,255,0.06)';
+    el.style.padding = '10px 14px';
+    el.style.borderRadius = '10px';
+    el.style.color = '#fff';
+    el.style.zIndex = 70;
+    el.style.fontSize = '14px';
+    el.style.backdropFilter = 'blur(4px)';
+    document.body.appendChild(el);
+    el.animate([{opacity:0, transform:'translateY(10px)'},{opacity:1, transform:'translateY(0)'}],{ duration:260, fill:'forwards' });
+    setTimeout(()=> el.animate([{opacity:1},{opacity:0}],{ duration:480, fill:'forwards' }),1800);
+    setTimeout(()=> el.remove(),2300);
+  }
+
+  // Fullscreen big timer
+  function openFullscreen(){
+    fullscreen.style.display = 'flex';
+    fullscreen.setAttribute('aria-hidden','false');
+  }
+  function closeFullscreen(){
+    fullscreen.style.display = 'none';
+    fullscreen.setAttribute('aria-hidden','true');
+  }
+
+  // event wiring
+  startPauseBtn.addEventListener('click', ()=> {
+    if(isRunning) pause(); else start();
+  });
+  resetBtn.addEventListener('click', resetAll);
+  skipBtn.addEventListener('click', skip);
+
+  // clicking the central inner time opens fullscreen
+  timeDisplay.addEventListener('click', openFullscreen);
+  document.getElementById('fsClose')?.addEventListener('click', closeFullscreen);
+
+  // settings toggles
+  openSettingsBtn.addEventListener('click', ()=> settingsPanel.style.display='block');
+  closeSettings.addEventListener('click', ()=> settingsPanel.style.display='none');
+  saveSettings.addEventListener('click', ()=>{
+    focusMinutes = Math.max(1, parseInt(focusInput.value,10)||25);
+    breakMinutes = Math.max(1, parseInt(breakInput.value,10)||5);
+    totalCycles = Math.max(1, parseInt(cyclesInput.value,10)||4);
+    animationChoice = animationSelect.value;
+    notificationAudio.volume = parseFloat(volumeSlider.value);
+    totalSeconds = inBreak ? breakMinutes*60 : focusMinutes*60;
+    remaining = totalSeconds;
+    currentCycle = 1;
+    updateDisplays();
+    settingsPanel.style.display='none';
+    showToast('Settings saved');
+  });
+
+  // theme toggle (simple)
+  document.getElementById('themeToggle').addEventListener('click', () => {
+    const body = document.body;
+    if(body.style.backgroundColor === 'white'){
+      body.style.background = 'var(--bg)';
+      document.querySelector('.sidebar').style.background = '#0e0e0f';
+    } else {
+      body.style.background = '#fff';
+      document.querySelector('.sidebar').style.background = '#fafafa';
+    }
+  });
+
+  // click outside to close settings (nice UX)
+  document.addEventListener('click', (e)=>{
+    if(!settingsPanel.contains(e.target) && !openSettingsBtn.contains(e.target) && settingsPanel.style.display==='block'){
+      // don't close if click inside
+      // keep open for now - user asked to use panel. (We won't auto-close.)
+    }
+  });
+
+  // initial render
+  updateDisplays();
+
+  // expose small helpers (for console/testing)
+  window._FT = {
+    start, pause, resetAll, skip, updateDisplays
+  };
+
+})(); // end closure
+</script>
+<footer><i><b>Made for Civil Servant🧑🏾‍🎓</b></i></footer>
+</body>
+</html>
